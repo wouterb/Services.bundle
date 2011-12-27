@@ -1,0 +1,98 @@
+import re, cgi
+AMF_URL = 'http://c.brightcove.com/services/messagebroker/amf'
+
+####################################################################################################
+def NormalizeURL(url):
+
+  return url
+
+####################################################################################################
+def MetadataObjectForURL(url):
+
+  url = ParseURL(url)
+  video = AmfRequest(url['playerID'], url['playerKey'], url['videoPlayer'])
+
+  return EpisodeObject(
+    show = video['publisherName'],
+    title = video['displayName'],
+    summary = video['shortDescription'],
+    duration = int(video['length']),
+    thumb = video['videoStillURL'].split('?')[0]
+  )
+
+####################################################################################################
+def MediaObjectsForURL(url):
+
+  url = ParseURL(url)
+  video = AmfRequest(url['playerID'], url['playerKey'], url['videoPlayer'])
+  video_url = video['FLVFullLengthURL']
+
+  if video_url.startswith('rtmp'):
+    (url, clip) = video_url.split('&', 1)
+
+    return [
+      MediaObject(
+        parts = [PartObject(key=RTMPVideoURL(url, clip))],
+        protocol = Protocol.RTMP
+      )
+    ]
+
+####################################################################################################
+def ParseURL(url):
+
+  qs = re.search('\?(.+)$', url)
+  url = {'playerID': None, 'playerKey': None, 'videoPlayer': None}
+
+  if qs:
+    qs = cgi.parse_qs(qs.group(1))
+
+    if 'playerID' in qs:
+      url['playerID'] = qs['playerID'][0]
+
+    if 'playerKey' in qs:
+      url['playerKey'] = qs['playerKey'][0]
+
+    if 'videoPlayer' in qs:
+      url['videoPlayer'] = qs['videoPlayer'][0]
+
+  return url
+
+####################################################################################################
+def AmfRequest(playerID=None, playerKey=None, videoPlayer=None):
+
+  endpoint = AMF_URL
+  if playerKey:
+    endpoint += '?playerKey=%s' % playerKey
+
+  client = AMF.RemotingService(url=endpoint, user_agent='', client_type=3)
+  service = client.getService('com.brightcove.experience.ExperienceRuntimeFacade')
+
+  AMF.RegisterClass(ContentOverride, 'com.brightcove.experience.ContentOverride')
+  AMF.RegisterClass(ViewerExperienceRequest, 'com.brightcove.experience.ViewerExperienceRequest')
+
+  video_obj = ContentOverride(videoPlayer)
+  experience = ViewerExperienceRequest(playerID, playerKey, video_obj)
+
+  return service.getDataForExperience('', experience)['programmedContent']['videoPlayer']['mediaDTO']
+
+####################################################################################################
+class ContentOverride(object):
+  def __init__ (self, videoPlayer=None):
+    self.contentType = int(0)
+    self.contentIds = None
+    self.target = 'videoPlayer'
+    self.contentId = int(videoPlayer)
+    self.featuredRefId = None
+    self.contentRefIds = None
+    self.featuredId = float('nan')
+    self.contentRefId = None
+
+class ViewerExperienceRequest(object):
+  def __init__ (self, playerID=None, playerKey=None, video_obj=None):
+    self.experienceId = int(playerID)
+    self.playerKey = playerKey
+    self.contentOverrides = []
+    self.contentOverrides.append(video_obj)
+    self.TTLToken = ''
+    self.URL = ''
+    self.deliveryType = float('nan')
