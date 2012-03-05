@@ -1,0 +1,15 @@
+import re
+
+def NormalizeURL(url):
+  return 'http://quadia.webtvframework.com/demo/_function/asset.get?id=12688'
+ 
+def MetadataObjectForURL(url):
+  json = JSON.ObjectFromURL(url)
+  return VideoClipObject(
+            title = json.result.asset.type,
+            summary = 'summary',
+            thumb = 'thumb')
+ 
+@deferred
+def MediaObjectsForURL(url):
+  return URLService.MediaObjectsForURL('http://quadia.webtvframework.com/demo/_function/attribute.video.retrieve?id=12671')
